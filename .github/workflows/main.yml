@@ -17,3 +17,12 @@ jobs:
         run: |
           echo "This is my Pipeline"
           uname -a
+          
+      - name: Check Docker Installation
+        run: |
+          docker
+          docker images
+          
+      - name: Run Docker Container
+        run: |
+          docker run hello-world

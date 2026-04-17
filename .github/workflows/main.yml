@@ -1,0 +1,19 @@
+name: CI CD pipeline setup
+
+on: 
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: First Step of CI CD Pipeline
+        run: |
+          echo "This is my Pipeline"
+          uname -a

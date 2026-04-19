@@ -1,28 +1,62 @@
-name: CI CD pipeline setup
+name: AetherFlow Production Deploy
 
-on: 
+on:
   push:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
-  build:
+  
+  test:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - name: Run Vitest
+        run: |
+          npm install
+          npm test # Agar test fail hua, to deployment ruk jayegi
 
-      - name: First Step of CI CD Pipeline
-        run: |
-          echo "This is my Pipeline"
-          uname -a
+  build-and-push:
+    needs: test 
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-north-1
           
-      - name: Check Docker Installation
+      - name: Login to ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & Push
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          docker
-          docker images
-          
-      - name: Run Docker Container
-        run: |
-          docker run hello-world
+          docker build -t $ECR_REGISTRY/aetherflow:latest .
+          docker push $ECR_REGISTRY/aetherflow:latest
+
+  
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            
+            aws ecr get-login-password --region eu-north-1 | docker login --username AWS --password-stdin ${{ secrets.AWS_REGISTRY_URL }}
+            
+            docker pull ${{ secrets.AWS_REGISTRY_URL }}/aetherflow:latest
+            
+            docker stop aetherflow || true
+            
+            docker rm aetherflow || true
+            
+            docker run -d --name aetherflow -p 80:80 ${{ secrets.AWS_REGISTRY_URL }}/aetherflow:latest
